@@ -1,11 +1,15 @@
-%%% Header
 clearvars; close all; clc;
 set(groot,'defaulttextinterpreter','latex');
 set(groot,'defaultLegendInterpreter','latex');
 set(groot,'defaultAxesTickLabelInterpreter','latex');
+addpath 'C:\Users\jacks\Documents\MATLAB\Add-Ons\Collections\linspecer';
+addpath 'C:\Users\jacks\Documents\MATLAB\Add-Ons\Collections\cmap\cmap-master\cmap-master\';
+m1pos=[50 50 700 700];
+m2pos=[-2500 -900 1800 1200];
 wavepos=[50 50 800 700];
 nfg=0;
 %%% End of Header
+
 
 %% SECOND ORDER WAVE EQUATION
 % u_tt - c^2 u_xx = 0
@@ -14,12 +18,6 @@ nfg=0;
 % [w v]'_t + f( [w v]')_x = 0
 % 
 % w = u_x , v = u_t
-
-%%% ----------- NOTE ----------- %%%
-%%% Boundary conditions are set  %%%
-%%% by altering L1,L2 at end pts %%%
-%%%       in CHARBC routine      %%%   
-%%% ---------------------------- %%%
 
 %% Mesh and timestep set up 
 % Mesh
@@ -41,19 +39,31 @@ nt=length(tv);
 
 %% Initial Spatial Condition
 
-% icpick=1; % <-- Single harmonic standing wave
-% icpick=2; % <-- Smaller single gaussian pulse
-% icpick=3; % <-- Single tall gaussian pulse
-icpick=4; % <-- undisturb, u0(x) = 0
+icpick=1; % <--
+icpick=2; % <--
+icpick=3; % <-- Single tall gaussian pulse
+% icpick=4; % <-- undisturb, u0(x) = 0
 u0=ICMAKER(icpick,xv);
 
 % u_t IC
 dudt0 = zeros(il,1); % <-- no initial impulse
 
-%% FORCING FOR UNDISTURBED IC
-if icpick==4
+% IC CHECK
+figure()
+plot(xv,u0,'k-','LineWidth',2)
+xlim([x0 xf]);
+ylim([-.2 1.2]);
 
-  % Spatial distribution of forcing function
+%%
+
+% FORCING FOR UNDISTURBED IC
+if icpick==4
+  famp=1;
+  omega=2;
+  f0x=zeros(il,1);
+  f0x(ceil(il/2))=famp; % add midpoint forcing
+  % f0x(1)=famp; % add endpoint forcing
+
   f0x = cos(5*norm*xv).^2;
   xst = interp1(xv,xv,.45,'nearest');
   xfn = interp1(xv,xv,.55,'nearest');
@@ -65,7 +75,7 @@ if icpick==4
   tdyn=zeros(1,nt);
   % tdyn=sin(omega*2*pi*tv); % monochromatic forcing
 
-  % Apply harmonic forcing over finite time interval
+
   omegav=[10];
   tst = interp1(tv,tv,0,'nearest');
   tfn = interp1(tv,tv,.3,'nearest');
@@ -74,38 +84,53 @@ if icpick==4
   for w=1:length(omegav)
     omega=omegav(w);
     tdyn(nst:nfn)=tdyn(nst:nfn)+sin(omega*2*pi*tv(nst:nfn));
+    % tdyn(nst:nfn)=tdyn(nst:nfn)+2*omega*pi*cos(omega*2*pi*tv(nst:nfn)); % <-- v(t) forcing
   end
   fxt=f0x'*tdyn; % outer product to get forcing function over space and time
 else
-  fxt=zeros(il,nt); % <-- no forcing for other IC cases 1,2,3
+  fxt=zeros(il,nt);
 end
 
-%% Get variables w0,v0 from IC of wave equation
+%% Initial Temporal Condition
+ut0(1:il)=0; % <-- zero impulse IC (non-moving medium?)
+
+%% Get variables w,v from IC
 w0=COMPACTDIFF4(u0,dx);
 v0=dudt0;
 
+% figure()
+% plot(xv,w0,'k-','LineWidth',2)
+% xlim([x0 xf]);
+% ylim([-.2 1.2]);
 
-%% Allocate variables and assign IC
-w=zeros(il,nt); v=zeros(il,nt); u=zeros(il,nt);
-w(:,1)=w0; v(:,1)=v0; u(:,1)=u0;
-
-%% Numerically solve equation system
+%% BUILD SOLUTION
+w=zeros(il,nt);
+v=zeros(il,nt);
+u=zeros(il,nt);
+w(:,1)=w0;
+v(:,1)=v0;
+u(:,1)=u0;
 for n=1:nt-1
+  wmy=w(:,n); 
+  vmy=v(:,n);
+  umy=u(:,n);
 
-  % Instantaneous fields
-  wmy=w(:,n);  vmy=v(:,n);  
+ % Add forcing to prim variable 
+ vmy = vmy + fxt(:,n);
 
-  % Add forcing to time derivative variable 
-  vmy = vmy + fxt(:,n);
-
-  % Create solution vector
   Q = [wmy,vmy];
 
-  % Integrate using RK3 algorithm
-  [QNP1] = SSPRK3(Q,dx,dt,c);
+  ifilt=0;
+  alphafilt=.3;
 
-  % Fill solution at next timestep
-  w(:,n+1)=QNP1(:,1);  v(:,n+1)=QNP1(:,2);
+  [QNP1] = SSPRK3(Q,dx,dt,c,ifilt,alphafilt,tv,n);
+
+
+
+  w(:,n+1)=QNP1(:,1);
+  v(:,n+1)=QNP1(:,2);
+
+
 end
 
 % Integrate v(x,t) = u_t to get actual solution
@@ -121,7 +146,7 @@ figure(nfg)
 imagesc(xv,tv,u')
 colormap jet;
 set(gca,'YDir','normal')
-title('$u(x,t)$')
+ylabel('$t$')
 xlabel('$x$')
 ylabel('$t$')
 fontsize(gcf,16,'points')
@@ -138,7 +163,7 @@ for n=1:nt
   plot(xv,umy,'k-','LineWidth',2)
   xlabel('$x$')
   ylabel('$u(x,t)$')
-  ylim([-1.2 1.2]);
+  % ylim([-1 1]);
   fontsize(gcf,16,'points')
   xlim([x0 xf]);
   grid off
@@ -148,3 +173,52 @@ for n=1:nt
   drawnow
 
 end
+
+
+
+
+%%
+
+% L2 NORM
+% E0=u0*u0';
+% for n=1:nt
+%   Et(n)=u(:,n)'*u(:,n);
+% end
+% Et=Et/E0;
+% 
+% figure(6)
+% plot(tv,Et,'k-','LineWidth',2)
+% % ylim([-1 1]);
+% %   yp=.7;
+% %   ylim([-yp yp]);
+% xlim([t0 tf]);
+% xlabel('$t$')
+% ylabel('$E(t)$')
+% grid off
+
+
+% Basis vectors for Ek spectrum
+% kmax=10;
+% for k=1:kmax
+%   PHI(:,k) = sin(norm*k*xv);
+% end
+% 
+% for n=1:nt
+%   umy=u(:,n);
+%   for k=1:kmax
+%     EK(k,n) = umy'*PHI(:,k);
+%   end
+% 
+% end
+
+% kv=1:1:kmax;
+% EK0=EK(:,1);
+% figure(7)
+% plot(kv,EK(:,1:10:100)./EK0,'o','LineWidth',2)
+% % ylim([-1 1]);
+% %   yp=.7;
+% %   ylim([-yp yp]);
+% % xlim([t0 tf]);
+% xlabel('$\hat{k}$')
+% ylabel('$E(k)$')
+% grid off

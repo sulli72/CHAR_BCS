@@ -39,7 +39,6 @@ c1=-3/2;
 d1=1/6;
 kv(ii) = ( a1*PHI(ii) + b1*PHI(ii-1) + c1*PHI(ii-2) + d1*PHI(ii-3)   )/(1*dx);
 
-
+% Compute derivatives using Thomas algorithm
 PHIDERIV = THOMAS(ac0,ap1,am1,kv);
-% PHIDERIV = PHIDERIV';
 end

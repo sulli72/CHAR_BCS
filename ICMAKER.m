@@ -7,7 +7,7 @@ norm=2*pi/(xf-x0);
 
 if pick==1
 % SIN WAVE IC
-alpha=5; %1/2;
+alpha=1; %1/2;
 u0 = sin(alpha*norm*xv);
 
 
